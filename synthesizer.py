@@ -1,58 +1,16 @@
-'''
-    Sequential.forward of Sequential(
-    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (1): ReLU(inplace=True)
-    (2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (3): ReLU(inplace=True)
-    (4): AvgPool2d(kernel_size=2, stride=2, padding=0)
-    (5): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (6): ReLU(inplace=True)
-    (7): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (8): ReLU(inplace=True)
-    (9): AvgPool2d(kernel_size=2, stride=2, padding=0)
-    (10): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (11): ReLU(inplace=True)
-    (12): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (13): ReLU(inplace=True)
-    (14): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (15): ReLU(inplace=True)
-    (16): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (17): ReLU(inplace=True)
-    (18): AvgPool2d(kernel_size=2, stride=2, padding=0)
-    (19): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (20): ReLU(inplace=True)
-    (21): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (22): ReLU(inplace=True)
-    (23): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (24): ReLU(inplace=True)
-    (25): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (26): ReLU(inplace=True)
-    (27): AvgPool2d(kernel_size=2, stride=2, padding=0)
-    (28): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (29): ReLU(inplace=True)
-    (30): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (31): ReLU(inplace=True)
-    (32): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (33): ReLU(inplace=True)
-    (34): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (35): ReLU(inplace=True)
-    (36): AvgPool2d(kernel_size=2, stride=2, padding=0)
-'''
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import torchvision
-import torchbearer
-from torchbearer import Trial
 import torch.optim as optim
 from torchvision import models
 import torchvision.transforms as transforms
-
+from torchvision.models.alexnet import AlexNet_Weights
 from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 
-TARGET_LAYERS = [1,3,6] # 1,6,11,20,29
+TARGET_LAYERS = [1,6,11,20,29] # Uncomment if using VGG
+#TARGET_LAYERS = [1,4,7] # Uncomment if using AlexNet
 IMAGE_SIZE = [100,100]
 EPHOCS = 1000
 
@@ -80,7 +38,8 @@ class TextureSynthesizer(nn.Module):
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
-        self.model = models.vgg19(weights=VGG19_Weights.DEFAULT).features
+        self.model = models.vgg19(weights=VGG19_Weights.DEFAULT).features # Uncomment if using VGG
+        #self.model = models.alexnet(weights=AlexNet_Weights.DEFAULT).features # Uncomment if using AlexNet
         # Replace maxpooling layers with average pooling
         for i in range(len(self.model)):
             if isinstance(self.model[i], nn.MaxPool2d):
@@ -130,3 +89,59 @@ def run_texture_synthesis(texture_img):
     print(synthesized_img.size())
     return synthesized_img
 
+'''
+    VGG: 
+    Sequential.forward of Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): ReLU(inplace=True)
+    (2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (3): ReLU(inplace=True)
+    (4): AvgPool2d(kernel_size=2, stride=2, padding=0)
+    (5): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (6): ReLU(inplace=True)
+    (7): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (8): ReLU(inplace=True)
+    (9): AvgPool2d(kernel_size=2, stride=2, padding=0)
+    (10): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (11): ReLU(inplace=True)
+    (12): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (13): ReLU(inplace=True)
+    (14): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (15): ReLU(inplace=True)
+    (16): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (17): ReLU(inplace=True)
+    (18): AvgPool2d(kernel_size=2, stride=2, padding=0)
+    (19): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (20): ReLU(inplace=True)
+    (21): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (22): ReLU(inplace=True)
+    (23): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (24): ReLU(inplace=True)
+    (25): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (26): ReLU(inplace=True)
+    (27): AvgPool2d(kernel_size=2, stride=2, padding=0)
+    (28): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (29): ReLU(inplace=True)
+    (30): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (31): ReLU(inplace=True)
+    (32): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (33): ReLU(inplace=True)
+    (34): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (35): ReLU(inplace=True)
+    (36): AvgPool2d(kernel_size=2, stride=2, padding=0)
+    AlexNet
+    Sequential(
+    (0): Conv2d(3, 64, kernel_size=(11, 11), stride=(4, 4), padding=(2, 2))
+    (1): ReLU(inplace=True)
+    (2): MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (3): Conv2d(64, 192, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2))
+    (4): ReLU(inplace=True)
+    (5): MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
+    (6): Conv2d(192, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (7): ReLU(inplace=True)
+    (8): Conv2d(384, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (9): ReLU(inplace=True)
+    (10): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (11): ReLU(inplace=True)
+    (12): MaxPool2d(kernel_size=3, stride=2, padding=0, dilation=1, ceil_mode=False)
+'''
