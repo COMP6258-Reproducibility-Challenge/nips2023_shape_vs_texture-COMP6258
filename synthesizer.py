@@ -44,6 +44,7 @@ import matplotlib.pyplot as plt
 import torch
 import torchvision
 import torchbearer
+from torchbearer import Trial
 import torch.optim as optim
 from torchvision import models
 import torchvision.transforms as transforms
@@ -51,7 +52,7 @@ import torchvision.transforms as transforms
 from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 
-TARGET_LAYERS = [1,6] # 1,6,11,20,29
+TARGET_LAYERS = [1,3,6] # 1,6,11,20,29
 IMAGE_SIZE = [100,100]
 EPHOCS = 1000
 
@@ -85,7 +86,7 @@ class Model(nn.Module):
             if isinstance(self.model[i], nn.MaxPool2d):
                 self.model[i] = nn.AvgPool2d(kernel_size=self.model[i].kernel_size, stride=self.model[i].stride, padding=self.model[i].padding, ceil_mode=False)
 
-    def analyze(self, texture_img):
+    def analyze(self, texture_img,device="cpu"):
         synthesizer_model = nn.Sequential()
         synthesizers = []
         for i in range(max(TARGET_LAYERS) + 1):
@@ -93,7 +94,7 @@ class Model(nn.Module):
             if i in TARGET_LAYERS:
                 target_feature = synthesizer_model(texture_img).detach()
                 G = gram_matrix(target_feature).detach()
-                synthesizer = TextureSynthesizer(G)
+                synthesizer = TextureSynthesizer(G).to(device)
                 synthesizers.append(synthesizer)
                 synthesizer_model.add_module(str(i) + "_synthesizer", synthesizer)
         print(synthesizer_model)
@@ -103,11 +104,12 @@ class Model(nn.Module):
 
     
 def run_texture_synthesis(texture_img):
-    Model()
-    synthesizer_model, synthesizers =  Model().analyze(texture_img)
-    synthesized_img = torch.rand(1,3,IMAGE_SIZE[0],IMAGE_SIZE[1])
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available, else CPU
+    model = Model().to(device)
+    texture_img = texture_img.to(device)
+    synthesizer_model, synthesizers =  model.analyze(texture_img,device)
+    synthesized_img = torch.rand(1,3,IMAGE_SIZE[0],IMAGE_SIZE[1]).to(device)
     optimizer = optim.LBFGS([synthesized_img.requires_grad_(True)])
-
     run = [0]
     while run[0] < EPHOCS:
         def closure():
@@ -128,25 +130,3 @@ def run_texture_synthesis(texture_img):
     print(synthesized_img.size())
     return synthesized_img
 
-texture = 'img.jpg'
-texture_image_orig = Image.open(texture)
-texture_image_orig = texture_image_orig.resize((IMAGE_SIZE[0], IMAGE_SIZE[1]))
-to_tensor = transforms.ToTensor()
-
-texture_image = to_tensor(texture_image_orig)
-#change the tensor to 4D with batch size 1
-texture_image = texture_image.unsqueeze(0)
-
-
-synthesized_image = run_texture_synthesis(texture_image)
-synthesized_image = synthesized_image.detach().squeeze(0).numpy().transpose(1, 2, 0)
-synthesized_image = np.clip(synthesized_image, 0, 1)
-# Display the original and synthesized images
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-ax1.imshow(texture_image_orig)
-ax1.axis('off')
-ax1.set_title('original image')
-ax2.imshow(synthesized_image)
-ax2.axis('off')
-ax2.set_title('synthesized image')
-plt.show()
