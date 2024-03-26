@@ -9,10 +9,10 @@ from torchvision.models.alexnet import AlexNet_Weights
 from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 
-TARGET_LAYERS = [1,6,11,20,29] # Uncomment if using VGG
+TARGET_LAYERS = [1,6,11]#,20,29] # Uncomment if using VGG
 #TARGET_LAYERS = [1,4,7] # Uncomment if using AlexNet
-IMAGE_SIZE = [100,100]
-EPHOCS = 1000
+IMAGE_SIZE = [500,500]
+EPHOCS = 5000
 
 def gram_matrix(input):
     b, c, h, w = input.size() # b=batch size, c=number of channels, (h, w)=dimensions of a feature map
@@ -32,20 +32,24 @@ class TextureSynthesizer(nn.Module):
         G = gram_matrix(input)
         self.loss =  El(self.target, G)
         return input
-        
-    
+
+
 
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
         self.model = models.vgg19(weights=VGG19_Weights.DEFAULT).features # Uncomment if using VGG
-        #self.model = models.alexnet(weights=AlexNet_Weights.DEFAULT).features # Uncomment if using AlexNet
-        # Replace maxpooling layers with average pooling
-        for i in range(len(self.model)):
-            if isinstance(self.model[i], nn.MaxPool2d):
-                self.model[i] = nn.AvgPool2d(kernel_size=self.model[i].kernel_size, stride=self.model[i].stride, padding=self.model[i].padding, ceil_mode=False)
 
-    def analyze(self, texture_img,device="cpu"):
+        # Replace maxpooling layers with average pooling
+        for i, layer in enumerate(self.model):
+            if isinstance(layer, nn.MaxPool2d):
+                self.model[i] = nn.AvgPool2d(kernel_size=layer.kernel_size,
+                                             stride=layer.stride,
+                                             padding=layer.padding,
+                                             ceil_mode=False)
+
+
+    def analyze(self, texture_img, device="cpu"):
         synthesizer_model = nn.Sequential()
         synthesizers = []
         for i in range(max(TARGET_LAYERS) + 1):
@@ -61,11 +65,12 @@ class Model(nn.Module):
         # Weight rescaling is not needed, as per this report https://github.com/rpetit/texture-synthesis/blob/master/report.pdf
 
 
-    
+
 def run_texture_synthesis(texture_img):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available, else CPU
     model = Model().to(device)
     texture_img = texture_img.to(device)
+
     synthesizer_model, synthesizers =  model.analyze(texture_img,device)
     synthesized_img = torch.rand(1,3,IMAGE_SIZE[0],IMAGE_SIZE[1]).to(device)
     optimizer = optim.LBFGS([synthesized_img.requires_grad_(True)])
@@ -80,17 +85,16 @@ def run_texture_synthesis(texture_img):
             texture_loss.backward()
             run[0] += 1
             if run[0] % (EPHOCS / 10) == 0:
-                print("run {}:".format(run))
-                print('Loss : {:4f}'.format(texture_loss.item()))
-                print()
+                print(f'\rrun {run}: loss {texture_loss.item()}', end='')
             return texture_loss
         optimizer.step(closure)
-        
+
+    print()
     print(synthesized_img.size())
     return synthesized_img
 
 '''
-    VGG: 
+    VGG:
     Sequential.forward of Sequential(
     (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
     (1): ReLU(inplace=True)
