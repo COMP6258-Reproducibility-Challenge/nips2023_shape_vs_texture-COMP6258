@@ -9,20 +9,45 @@ from torchvision.models.alexnet import AlexNet_Weights
 from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 
-TARGET_LAYERS = [1,6,11]#,20,29] # Uncomment if using VGG
+TARGET_LAYERS = [1,6,11,20,29] # Uncomment if using VGG
+
 #TARGET_LAYERS = [1,4,7] # Uncomment if using AlexNet
 IMAGE_SIZE = [500,500]
 EPHOCS = 5000
+TOPK = 0.2
+VERRR = 1
 
-def gram_matrix(input):
+def gram_matrix(input, doTopk=True):
     b, c, h, w = input.size() # b=batch size, c=number of channels, (h, w)=dimensions of a feature map
     F = input.view(b, c, h * w) # Reshape feature matrix
-    G = torch.bmm(F, F.transpose(1, 2)) / (h * w)
+    if doTopk:
+        topk_keep_num = max(1, int(TOPK * h * w))
+        _, index = torch.topk(F.abs(), topk_keep_num, dim=2)
+        mask = torch.zeros_like(F).scatter_(2, index, 1).to('cuda:0')
+        M  = mask * F
+    else:
+        M = F
+    G = torch.bmm(M, M.transpose(1, 2)) / (h * w)
     return G
 
 # Contribution of layer l to the total loss
 def El (G, G_hat):
     return 1e9*torch.mean((G - G_hat)**2)
+
+
+def topk_layer(x, topk, reverse=False, device='cuda'):
+    n, c, h, w = x.shape
+
+    x_reshape = x.view(n, c, h * w)
+    topk_keep_num = max(1, int(topk * h * w))
+    _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
+    mask = torch.zeros_like(x_reshape).scatter_(2, index, 1).to(device)
+    if reverse:
+        mask = torch.ones_like(mask) - mask
+    sparse_x = mask * x_reshape
+
+    return sparse_x.view(n, c, h, w)
+
 
 class TextureSynthesizer(nn.Module):
     def __init__(self, target_gram):
@@ -60,13 +85,13 @@ class Model(nn.Module):
                 synthesizer = TextureSynthesizer(G).to(device)
                 synthesizers.append(synthesizer)
                 synthesizer_model.add_module(str(i) + "_synthesizer", synthesizer)
-        print(synthesizer_model)
+        #print(synthesizer_model)
         return synthesizer_model, synthesizers
         # Weight rescaling is not needed, as per this report https://github.com/rpetit/texture-synthesis/blob/master/report.pdf
 
 
-
 def run_texture_synthesis(texture_img):
+    print(f'version: {VERRR}')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available, else CPU
     model = Model().to(device)
     texture_img = texture_img.to(device)
@@ -84,8 +109,7 @@ def run_texture_synthesis(texture_img):
                 texture_loss += s.loss
             texture_loss.backward()
             run[0] += 1
-            if run[0] % (EPHOCS / 10) == 0:
-                print(f'\rrun {run}: loss {texture_loss.item()}', end='')
+            print(f'\rrun {run}: loss {texture_loss.item()}', end='')
             return texture_loss
         optimizer.step(closure)
 
