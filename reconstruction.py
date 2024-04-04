@@ -10,12 +10,19 @@ from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 import hashlib
 
+class ActivationHook:
+    def __init__(self, name=None):
+        self.name = name
+
+    def __call__(self, module, input, output):
+        self.activations = output
+
 class TopKLayer(nn.Module):
-    def __init__(self, target, topk = 0.2, device = 'cuda'):
+    def __init__(self, topk = 0.2, device = 'cuda'):
         super().__init__()
         self.topk = topk
         self.device = device
-        self.targetActivations = target
+        self.targetActivations = torch.zeros(1).to(device)
         self.loss = 0
 
     def forward(self, x):
@@ -32,6 +39,9 @@ class TopKLayer(nn.Module):
 
         return out
 
+    def setTarget(self, target):
+        self.targetActivations = target
+
     def __repr__(self):
         """
         Just like any class in Python, you can also define custom method on PyTorch modules
@@ -39,7 +49,7 @@ class TopKLayer(nn.Module):
         return f'TopK({self.topk})'
 
 class Model(nn.Module):
-    def __init__(self, target_image_path, important_layers = [1,6,11,20,29],
+    def __init__(self, target_image_path, important_layers = [1,6,11,20,29], topk = 0.2,
                  dimensions = (500, 500), device = 'cuda'):
         print(hashlib.md5(open('./reconstruction.py','rb').read()).hexdigest()) # make sure we sync'd with nvidia server
         super(Model, self).__init__()
@@ -52,7 +62,8 @@ class Model(nn.Module):
         self.device = device
 
         VGGLayers = list(models.vgg19(weights=VGG19_Weights.DEFAULT).features._modules.values())
-        topkTargets = self.__loadTargetActivations(important_layers)
+        actHooks = []
+        actHandles = []
         for i, layer in enumerate(VGGLayers):
             # Add the necessary layers
             if isinstance(layer, nn.MaxPool2d):
@@ -63,16 +74,24 @@ class Model(nn.Module):
 
             # Add TopK on the important layers
             if i in important_layers:
-                topkLayer = TopKLayer(topkTargets.pop(0))
+                topkLayer = TopKLayer(topk=topk)
+                ah = ActivationHook()
+                actHandles.append(topkLayer.register_forward_hook(ah))
+
+                actHooks.append(ah)
                 self.topkLayers.append(topkLayer)
                 self.model.append(topkLayer)
 
 
         self.to(device)
         # Set the target activations
-#        self(self.target_image)
-#        for t in self.topkLayers:
-#            t.setTarget()
+        self.eval()
+        self(self.target_image)
+        for t in self.topkLayers:
+            target = actHooks.pop(0).activations
+            actHandles.pop(0).remove()
+            t.setTarget(target)
+        self.train()
 
 
     def __loadTargetActivations(self, layers):
