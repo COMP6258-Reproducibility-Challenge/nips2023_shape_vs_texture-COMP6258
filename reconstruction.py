@@ -10,14 +10,13 @@ from torchvision.models.vgg import VGG19_Weights
 import torch.nn as nn
 import hashlib
 
-
-
 class TopKLayer(nn.Module):
-    def __init__(self, topk = 1, device = 'cuda'):
+    def __init__(self, target, topk = 0.2, device = 'cuda'):
         super().__init__()
         self.topk = topk
         self.device = device
-        self.target = False
+        self.targetActivations = target
+        self.loss = 0
 
     def forward(self, x):
         n, c, h, w = x.shape
@@ -29,18 +28,18 @@ class TopKLayer(nn.Module):
         sparse_x = mask * x_reshape
         out = sparse_x.view(n, c, h, w)
 
-        self.activations = out
-        if (self.target):
-            self.loss = ((self.activations - self.targetActivations) ** 2).sum()
+        self.loss = ((out - self.targetActivations) ** 2).sum()
 
         return out
 
-    def setTarget(self):
-        self.targetActivations = self.activations
-        self.target = True
+    def __repr__(self):
+        """
+        Just like any class in Python, you can also define custom method on PyTorch modules
+        """
+        return f'TopK({self.topk})'
 
 class Model(nn.Module):
-    def __init__(self, target_image_path, important_layers = [1,6,11],#,20,29],
+    def __init__(self, target_image_path, important_layers = [1,6,11,20,29],
                  dimensions = (500, 500), device = 'cuda'):
         print(hashlib.md5(open('./reconstruction.py','rb').read()).hexdigest()) # make sure we sync'd with nvidia server
         super(Model, self).__init__()
@@ -49,9 +48,11 @@ class Model(nn.Module):
         self.model = nn.Sequential()
         self.topkLayers = []
 
+
+        self.device = device
+
         VGGLayers = list(models.vgg19(weights=VGG19_Weights.DEFAULT).features._modules.values())
-
-
+        topkTargets = self.__loadTargetActivations(important_layers)
         for i, layer in enumerate(VGGLayers):
             # Add the necessary layers
             if isinstance(layer, nn.MaxPool2d):
@@ -62,14 +63,23 @@ class Model(nn.Module):
 
             # Add TopK on the important layers
             if i in important_layers:
-                self.topkLayers.append(TopKLayer())
-                self.model.append(self.topkLayers[-1])
+                topkLayer = TopKLayer(topkTargets.pop(0))
+                self.topkLayers.append(topkLayer)
+                self.model.append(topkLayer)
+
 
         self.to(device)
         # Set the target activations
-        self(self.target_image)
-        for t in self.topkLayers:
-            t.setTarget()
+#        self(self.target_image)
+#        for t in self.topkLayers:
+#            t.setTarget()
+
+
+    def __loadTargetActivations(self, layers):
+        l = []
+        for i in range(len(layers)):
+            l.append(torch.load(f'topk{i}'))
+        return l
 
 
     def __openImage(self, path) -> torch.Tensor:
@@ -79,7 +89,11 @@ class Model(nn.Module):
         return self.model(x)
 
     def loss(self):
-        return torch.tensor([t.loss for t in self.topkLayers], requires_grad=True).sum()
+        l = torch.zeros(1, device=self.device)
+        for t in self.topkLayers:
+            l += t.loss
+        return l
+
 
     def analyze(self, texture_img, device="cpu"):
         synthesizer_model = nn.Sequential()
