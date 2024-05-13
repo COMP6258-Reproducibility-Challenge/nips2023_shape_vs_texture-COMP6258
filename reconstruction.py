@@ -18,10 +18,11 @@ class ActivationHook:
         self.activations = output
 
 class TopKLayer(nn.Module):
-    def __init__(self, topk = 0.2, device = 'cuda'):
+    def __init__(self, topk = 0.2, device = 'cuda', reverse_topk=False):
         super().__init__()
         self.topk = topk
         self.device = device
+        self.reverse_topk = reverse_topk
         self.targetActivations = torch.zeros(1).to(device)
         self.loss = 0
 
@@ -32,6 +33,9 @@ class TopKLayer(nn.Module):
         topk_keep_num = max(1, int(self.topk * h * w))
         _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
         mask = torch.zeros_like(x_reshape).scatter_(2, index, 1).to(self.device)
+        if self.reverse_topk:
+            mask = torch.ones_like(mask) - mask
+
         sparse_x = mask * x_reshape
         out = sparse_x.view(n, c, h, w)
 
@@ -50,8 +54,7 @@ class TopKLayer(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, target_image_path, important_layers = [1,6,11,20,29], topk = 0.2,
-                 dimensions = (500, 500), device = 'cuda'):
-        print(hashlib.md5(open('./reconstruction.py','rb').read()).hexdigest()) # make sure we sync'd with nvidia server
+                 dimensions = (500, 500), device = 'cuda', reverse_topk=False):
         super(Model, self).__init__()
         self.dimensions = dimensions
         self.target_image = self.__openImage(target_image_path).to(device)
@@ -74,7 +77,7 @@ class Model(nn.Module):
 
             # Add TopK on the important layers
             if i in important_layers:
-                topkLayer = TopKLayer(topk=topk)
+                topkLayer = TopKLayer(topk=topk, reverse_topk=reverse_topk)
                 ah = ActivationHook()
                 actHandles.append(topkLayer.register_forward_hook(ah))
 
