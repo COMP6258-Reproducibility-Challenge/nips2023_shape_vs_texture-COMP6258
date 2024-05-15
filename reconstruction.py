@@ -19,11 +19,12 @@ class ActivationHook:
         self.activations = output
 
 class TopKLayer(nn.Module):
-    def __init__(self, topk = 0.2, device = 'cuda', mode='topk'):
+    def __init__(self, topk = 0.2, device = 'cuda', mode='topk', forward=False):
         super().__init__()
         self.topk = topk
         self.device = device
         self.targetActivations = torch.zeros(1).to(device)
+        self.targetSet = False
         self.loss = 0
         self.mode = mode
 
@@ -32,6 +33,8 @@ class TopKLayer(nn.Module):
 
         x_reshape = x.view(n, c, h * w)
 
+        if not self.forward and self.targetSet:
+            out = x_reshape.view(n, c, h, w)
         if self.mode == 'topk':
             topk_keep_num = max(1, int(self.topk * h * w))
             _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
@@ -50,12 +53,13 @@ class TopKLayer(nn.Module):
         else:
             raise NotImplemented()
 
-        self.loss = ((out - self.targetActivations) ** 2).sum()
+        self.loss = (1e9 * 1.0 / 4.0) * ((out - self.targetActivations) ** 2).sum()
 
         return out
 
     def setTarget(self, target):
         self.targetActivations = target
+        self.targetSet = True
 
     def __repr__(self):
         """
@@ -65,7 +69,7 @@ class TopKLayer(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, target_image_path, important_layers = [1,6,11,20,29], topk = 0.2,
-                 dimensions = (500, 500), device = 'cuda', mode='topk'):
+                 dimensions = (500, 500), device = 'cuda', mode='topk', forward=True):
         super(Model, self).__init__()
         self.dimensions = dimensions
         self.target_image = self.__openImage(target_image_path).to(device)
@@ -88,7 +92,7 @@ class Model(nn.Module):
 
             # Add TopK on the important layers
             if i in important_layers:
-                topkLayer = TopKLayer(topk=topk, mode=mode)
+                topkLayer = TopKLayer(topk=topk, mode=mode, forward=forward)
                 ah = ActivationHook()
                 actHandles.append(topkLayer.register_forward_hook(ah))
 
@@ -105,7 +109,7 @@ class Model(nn.Module):
             target = actHooks.pop(0).activations
             actHandles.pop(0).remove()
             t.setTarget(target)
-        self.train()
+        #self.train()
 
 
     def __loadTargetActivations(self, layers):
