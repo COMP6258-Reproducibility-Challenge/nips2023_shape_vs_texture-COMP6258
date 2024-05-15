@@ -7,6 +7,7 @@ from torchvision import models
 import torchvision.transforms as transforms
 from torchvision.models.alexnet import AlexNet_Weights
 from torchvision.models.vgg import VGG19_Weights
+from torchvision.models.vgg import VGG16_Weights
 import torch.nn as nn
 import hashlib
 
@@ -64,7 +65,7 @@ class Model(nn.Module):
 
         self.device = device
 
-        VGGLayers = list(models.vgg19(weights=VGG19_Weights.DEFAULT).features._modules.values())
+        VGGLayers = list(models.vgg16(weights=VGG16_Weights.DEFAULT).features._modules.values())
         actHooks = []
         actHandles = []
         for i, layer in enumerate(VGGLayers):
