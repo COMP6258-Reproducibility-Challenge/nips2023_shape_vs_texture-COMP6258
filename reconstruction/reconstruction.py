@@ -19,15 +19,13 @@ class ActivationHook:
         self.activations = output
 
 class TopKLayer(nn.Module):
-    def __init__(self, topk = 0.2, device = 'cuda', mode='topk', forward=False, clip=False):
+    def __init__(self, topk = 0.2, device = 'cuda', mode='topk'):
         super().__init__()
         self.topk = topk
         self.device = device
         self.targetActivations = torch.zeros(1).to(device)
-        self.targetSet = False
         self.loss = 0
         self.mode = mode
-        self.clip = clip
 
     def forward(self, x):
         n, c, h, w = x.shape
@@ -42,8 +40,6 @@ class TopKLayer(nn.Module):
             mask = torch.zeros_like(x_reshape).scatter_(2, index, 1).to(self.device)
             sparse_x = mask * x_reshape
             out = sparse_x.view(n, c, h, w)
-            if self.clip:
-                out = torch.clip(out, 0, 1)
         elif self.mode == 'non-topk':
             topk_keep_num = max(1, int(self.topk * h * w))
             _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
@@ -51,14 +47,12 @@ class TopKLayer(nn.Module):
             mask = torch.ones_like(mask) - mask
             sparse_x = mask * x_reshape
             out = sparse_x.view(n, c, h, w)
-            if self.clip:
-                out = torch.clip(out, 0, 1)
         elif self.mode == 'both':
             out = x_reshape.view(n, c, h, w)
         else:
             raise NotImplemented()
 
-        self.loss = (1e9 * 1.0 / 4.0) * ((out - self.targetActivations) ** 2).sum()
+        self.loss = ((out - self.targetActivations) ** 2).sum()
 
         return out
 
@@ -74,7 +68,7 @@ class TopKLayer(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, target_image_path, important_layers = [1,6,11,20,29], topk = 0.2,
-                 dimensions = (500, 500), device = 'cuda', mode='topk', forward=True):
+                 dimensions = (500, 500), device = 'cuda', mode='topk'):
         super(Model, self).__init__()
         self.dimensions = dimensions
         self.target_image = self.__openImage(target_image_path).to(device)
@@ -87,7 +81,6 @@ class Model(nn.Module):
         VGGLayers = list(models.vgg16(weights=VGG16_Weights.DEFAULT).features._modules.values())
         actHooks = []
         actHandles = []
-        input_done = False
         for i, layer in enumerate(VGGLayers):
             # Add the necessary layers
             if isinstance(layer, nn.MaxPool2d):
@@ -99,11 +92,7 @@ class Model(nn.Module):
 
             # Add TopK on the important layers
             if i in important_layers:
-                if not input_done:
-                    clip = False
-                else:
-                    clip = False
-                topkLayer = TopKLayer(topk=topk, mode=mode, forward=forward, clip=clip)
+                topkLayer = TopKLayer(topk=topk, mode=mode)
                 ah = ActivationHook()
                 actHandles.append(topkLayer.register_forward_hook(ah))
 
