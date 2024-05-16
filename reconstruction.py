@@ -19,7 +19,7 @@ class ActivationHook:
         self.activations = output
 
 class TopKLayer(nn.Module):
-    def __init__(self, topk = 0.2, device = 'cuda', mode='topk', forward=False):
+    def __init__(self, topk = 0.2, device = 'cuda', mode='topk', forward=False, clip=False):
         super().__init__()
         self.topk = topk
         self.device = device
@@ -27,6 +27,7 @@ class TopKLayer(nn.Module):
         self.targetSet = False
         self.loss = 0
         self.mode = mode
+        self.clip = clip
 
     def forward(self, x):
         n, c, h, w = x.shape
@@ -35,12 +36,14 @@ class TopKLayer(nn.Module):
 
         if not self.forward and self.targetSet:
             out = x_reshape.view(n, c, h, w)
-        if self.mode == 'topk':
+        elif self.mode == 'topk':
             topk_keep_num = max(1, int(self.topk * h * w))
             _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
             mask = torch.zeros_like(x_reshape).scatter_(2, index, 1).to(self.device)
             sparse_x = mask * x_reshape
             out = sparse_x.view(n, c, h, w)
+            if self.clip:
+                out = torch.clip(out, 0, 1)
         elif self.mode == 'non-topk':
             topk_keep_num = max(1, int(self.topk * h * w))
             _, index = torch.topk(x_reshape.abs(), topk_keep_num, dim=2)
@@ -48,6 +51,8 @@ class TopKLayer(nn.Module):
             mask = torch.ones_like(mask) - mask
             sparse_x = mask * x_reshape
             out = sparse_x.view(n, c, h, w)
+            if self.clip:
+                out = torch.clip(out, 0, 1)
         elif self.mode == 'both':
             out = x_reshape.view(n, c, h, w)
         else:
@@ -82,6 +87,7 @@ class Model(nn.Module):
         VGGLayers = list(models.vgg16(weights=VGG16_Weights.DEFAULT).features._modules.values())
         actHooks = []
         actHandles = []
+        input_done = False
         for i, layer in enumerate(VGGLayers):
             # Add the necessary layers
             if isinstance(layer, nn.MaxPool2d):
@@ -90,9 +96,14 @@ class Model(nn.Module):
             else:
                 self.model.append(layer)
 
+
             # Add TopK on the important layers
             if i in important_layers:
-                topkLayer = TopKLayer(topk=topk, mode=mode, forward=forward)
+                if not input_done:
+                    clip = False
+                else:
+                    clip = False
+                topkLayer = TopKLayer(topk=topk, mode=mode, forward=forward, clip=clip)
                 ah = ActivationHook()
                 actHandles.append(topkLayer.register_forward_hook(ah))
 
