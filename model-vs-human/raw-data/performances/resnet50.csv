@@ -1,0 +1,6 @@
+subj,dataset_name,metric_name,performance
+resnet50,edge,accuracy (top-1),0.1375
+resnet50,silhouette,accuracy (top-1),0.54375
+resnet50,cue-conflict,accuracy (top-1),0.18203125
+resnet50,colour,accuracy (top-1),0.97578125
+resnet50,contrast,accuracy (top-1),0.68046875
