@@ -21,3 +21,8 @@ To recreate figure 3, see the associated [Jupyter notebook](reconstruction/recon
 The resulting figures will be in the [results](reconstruction/results) directory, in all three shapes.
 
 ## Figure 5
+To run the model-vs-human benchmark, first follow the instruction in the readme file under that, pointing towards https://github.com/bethgelab/model-vs-human/ (export and install requirements).
+
+To recreate the results, run the evaluate.py file under model-vs-human/examples/evaluate.py.
+
+To recreate the results using our custom implementation of the top-K layer, you would need to change the import statement under model-vs-human/modelvshuman/models/pytorch/model_zoo.py. Further information about that can be found in that file.
